@@ -1,0 +1,63 @@
+#!/bin/bash
+
+#Find directory of this script
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+#determine the R executable to use
+##TO DO: make this work with project Rs
+if [ -n "$R_HOME" ]; then
+  R_EXECUTABLE="$R_HOME/bin/R"
+else
+  R_EXECUTABLE=$(which R)
+fi
+
+#find library path
+LIBRARY_PATH="$DIR/../.."
+if [ ! -d "$LIBRARY_PATH/smartqc" ]; then
+  LIBRARY_PATH="/home/jarcos/clean/smartqc_project/renv/library/linux-ubuntu-jammy/R-4.4/x86_64-pc-linux-gnu"
+fi
+
+#R command builder, options added here, must be consistent with smartqc/R/smartqc.R
+R_COMMAND="
+.libPaths(c('$LIBRARY_PATH', .libPaths()))
+library(smartqc)
+library(optparse)
+
+option_list <- list(
+  make_option(c('-i', '--input'), type='character', default=NULL, 
+              help='Input directory with raw data', metavar='character'),
+  make_option(c('-o', '--output'), type='character', default='processed_data.rds', 
+              help='Output file [default= %default]', metavar='character'),
+  make_option(c('-r', '--root'), type='character', default=NULL, 
+              help='Root directory containing Studies folder', metavar='character'),
+  make_option(c('-s', '--study'), type='character', default=NULL, 
+              help='Study name', metavar='character'),
+  make_option(c('-g', '--organism'), type='character', default='MOUSE', 
+              help='Organism (MOUSE, HUMAN, or RAT) [default= %default]', metavar='character')
+)
+
+opt_parser <- OptionParser(option_list=option_list)
+opt <- parse_args(opt_parser)
+
+print(opt)  # Debug: Print parsed options
+
+if (is.null(opt\$input) && (is.null(opt\$root) || is.null(opt\$study))) {
+  print_help(opt_parser)
+  stop('Either input directory or root directory and study name must be supplied', call.=FALSE)
+}
+
+tryCatch({
+  if (!is.null(opt\$input)) {
+    run_smartqc(input = opt\$input, output = opt\$output, organism = opt\$organism)
+  } else {
+    run_smartqc(root = opt\$root, study = opt\$study, organism = opt\$organism)
+  }
+  cat('SmartQC analysis completed successfully.\n')
+}, error = function(e) {
+  cat('Error in SmartQC analysis:', conditionMessage(e), '\n')
+  quit(status = 1)
+})
+"
+
+#run R command while parsing above
+$R_EXECUTABLE --vanilla --slave -e "$R_COMMAND" --args "$@"

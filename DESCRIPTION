@@ -1,0 +1,39 @@
+Package: smartqc
+Title: Smart Quality Control for Single-Cell RNA-seq Data
+Version: 0.1.0
+Authors@R: 
+    person("Javier", "Arcos Hódar", email = "jarcos@cicbiogune.es", role = c("aut", "cre"))
+Description: Provides functions for state of the art quality control and processing of single-cell RNA-seq data.
+License: ##TODO
+Encoding: UTF-8
+LazyData: true
+Depends: 
+    R (>= 3.5.0)
+##TODO: HOW TO AUTOMATE
+Imports: 
+    Seurat,
+    DoubletFinder,
+    RColorBrewer,
+    ggplot2,
+    ggExtra,
+    cowplot,
+    dplyr,
+    cluster,
+    ggstatsplot,
+    SCINA,
+    plyr,
+    biomaRt,
+    densvis,
+    monocle3,
+    singleseqgset,
+    pheatmap,
+    SeuratWrappers,
+    GSA,
+    preprocessCore,
+    scCustomize,
+    optparse
+Suggests:
+    testthat
+Bioconductor: true
+RoxygenNote: 7.3.2
+Roxygen: list(markdown = TRUE)
