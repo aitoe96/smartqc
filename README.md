@@ -22,7 +22,7 @@ devtools::install_github("arc85/singleseqgset")
 devtools::install_github('cole-trapnell-lab/monocle3')
 
 # Install SmartQC
-devtools::install_github('your_github_username/smartqc')
+devtools::install_github('jarcoshodar/smartqc')
 ```
 
 2. After installation, add the SmartQC executable to your PATH:
