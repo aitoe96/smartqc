@@ -8,7 +8,7 @@
 A data frame with columns for cell cycle phase, gene ID, and symbol
 }
 \source{
-Your source information here
+##TO DO: detail ensembl process here, same as commentedin function
 }
 \usage{
 CellCycleGenes_RAT

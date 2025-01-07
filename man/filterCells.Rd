@@ -29,6 +29,7 @@ A filtered Seurat object
 \description{
 This function filters cells based on percentage of mitochondrial transcripts,
 number of genes, and number of transcripts detected.
+A median absolute deviation approach, letting the distribution of the data define cutoffs, is chosen
 }
 \examples{
 filtered_seurat <- filterCells(seurat_obj, mad.coeff = 3, pass = 1, org = "HUMAN")

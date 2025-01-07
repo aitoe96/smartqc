@@ -9,24 +9,22 @@ findOptimalResolution(seur, pcs, output_path = output_dir)
 \arguments{
 \item{seur}{A Seurat object.}
 
-\item{pcs}{An integer range specifying the number of principal components to use.
-Example use is 1:50 or 1:numPCs when numPCs was previously defined as 50.}
+\item{pcs}{An integer vector specifying which principal components to use
+(e.g., 1:50).}
 
 \item{output_path}{A string specifying the directory to save the plot.
-Default is \code{output_dir}. output_dir is defined by the workflow in
-global environment for loops, but any other valid path can be given.}
+Default is \code{output_dir}.}
 }
 \value{
-A modified Seurat object with the winning clustering implemented.
+A modified Seurat object with the winning clustering in
+\code{seurat_clusters} and \code{Idents(seur)}.
 }
 \description{
-This function takes a Seurat object and PC components number,
-estimates the Calinski-Harabasz index for a given range of resolutions,
-and implements the one with the highest score.
-This implementation rewards within and between cluster heterogeneity.
-Often several cell types are in a cluster, so future functions implement
-ways of subsetting and merging clusters for labeling.
-A plot of the Calinski-Harabasz index across resolutions is saved.
+This function takes a Seurat object and a range of PC components,
+calculates the Calinski-Harabasz index at a range of resolutions (Leiden),
+and applies the resolution that yields the highest CH index back to the
+Seurat object's \code{seurat_clusters} metadata.
+A plot of the CH index across resolutions is saved.
 }
 \examples{
 seur <- findOptimalResolution(seur, pcs = 1:50)

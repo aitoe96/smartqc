@@ -4,20 +4,20 @@ Version: 0.1.0
 Authors@R: 
     person("Javier", "Arcos Hódar", email = "jarcos@cicbiogune.es", role = c("aut", "cre"))
 Description: Provides functions for state of the art quality control and processing of single-cell RNA-seq data.
-License: ##TODO
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Depends: 
     R (>= 3.5.0)
-##TODO: HOW TO AUTOMATE
 Imports: 
-    Seurat,
+    Seurat (>= 4.0.0),
+    SeuratObject (>= 3.0.0),
     DoubletFinder,
     RColorBrewer,
-    ggplot2,
+    ggplot2 (>= 3.4.0),
     ggExtra,
     cowplot,
-    dplyr,
+    dplyr (>= 1.0.0),
     cluster,
     ggstatsplot,
     SCINA,
@@ -31,9 +31,23 @@ Imports:
     GSA,
     preprocessCore,
     scCustomize,
-    optparse
+    optparse,
+    hdf5r,
+    SeuratDisk,
+    methods,
+    stats,
+    utils,
+    scCustomize (>= 1.1.3)
+biocViews:
+    SingleCell,
+    RNASeq,
+    QualityControl,
+    Preprocessing
+Config/testthat/edition: 3
 Suggests:
-    testthat
-Bioconductor: true
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
 RoxygenNote: 7.3.2
 Roxygen: list(markdown = TRUE)

@@ -18,6 +18,7 @@
 #' @import singleseqgset
 #' @import SeuratWrappers
 #' @import scCustomize
+#' @import SingleCellExperiment
 #' @importFrom RColorBrewer brewer.pal
 #' @importFrom ggExtra ggMarginal
 #' @importFrom cowplot plot_grid
@@ -29,6 +30,8 @@
 #'
 #' @export
 run_smartqc <- function(input = NULL, output = NULL, root = NULL, study = NULL, organism = "MOUSE") {
+  options(future.globals.maxSize = 50 * 1024^3) # 50 GB
+  
   #silence package start up and warnings noise but ##TODO: find fix
   old_options <- options(
     warn = -1, 
@@ -170,7 +173,8 @@ process_sample <- function(input_dir,
                            run_scina = FALSE,
                            umap_neighbors = 20) {
   tryCatch({
-  
+    options(future.globals.maxSize = 50 * 1024^3) # 50 GB
+    
   if (length(list.files(input_dir)) == 1) {
     file_name <- list.files(input_dir)[1]
     if (grepl("\\.h5$", file_name)) {
@@ -237,7 +241,7 @@ process_sample <- function(input_dir,
   numPCs <- 50  # Hard-coded
   
   #Doublet detection
-  sweep.list <- paramSweep(seur, PCs = 1:numPCs,sct = T)
+  sweep.list <- paramSweep_v3(seur, PCs = 1:numPCs,sct = T)
     
   sweep.stats <- summarizeSweep(sweep.list, GT = FALSE)
     
@@ -251,7 +255,7 @@ process_sample <- function(input_dir,
     
   nExp <- round(ncol(seur) * (unname(predict(lm_doublets,data.frame(numCellsRec = ncol(seur))))/100))
   pK <- as.numeric(levels(bcmvn$pK)[bcmvn$BCmetric == max(bcmvn$BCmetric)])
-  seur <- doubletFinder(seu = seur,
+  seur <- doubletFinder_v3(seu = seur,
                                     PCs = 1:numPCs,
                                     pN = 0.25, #default
                                     pK = pK,

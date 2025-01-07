@@ -7,10 +7,10 @@
 load_necessary_data(org)
 }
 \arguments{
-\item{org}{Organism (MOUSE, HUMAN, or RAT)}
+\item{org}{Organism (MOUSE, HUMAN, or RAT) given by user at start}
 }
 \value{
-A list containing loaded data
+A list containing necessary marker data for SCINA and necessary cell cycle genes data for vst regress out
 }
 \description{
 Load necessary data for SmartQC
