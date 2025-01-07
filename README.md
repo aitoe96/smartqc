@@ -14,7 +14,7 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocMana
 BiocManager::install(c("preprocessCore", "BiocGenerics", "DelayedArray", "DelayedMatrixStats",
                        "limma", "lme4", "S4Vectors", "SingleCellExperiment",
                        "SummarizedExperiment", "batchelor", "HDF5Array",
-                       "terra", "ggrastr", "densvis", "biomaRt"))
+                       "terra", "ggrastr", "densvis", "biomaRt", "glmGamPoi"))
 
 # Install GitHub dependencies
 devtools::install_github("chris-mcginnis-ucsf/DoubletFinder@1b1d4e2")
