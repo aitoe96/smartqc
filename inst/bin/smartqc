@@ -1,63 +1,95 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-#Find directory of this script
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# ------------------------------------------------------------------------
+# 1) Identify where this script lives (so we can climb directories if needed)
+# ------------------------------------------------------------------------
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-#determine the R executable to use
-##TO DO: make this work with project Rs
-if [ -n "$R_HOME" ]; then
-  R_EXECUTABLE="$R_HOME/bin/R"
+# ------------------------------------------------------------------------
+# 2) Function to locate renv project by looking for renv/activate.R
+#    starting from SCRIPT_DIR upward. Or you can start from $PWD—depends on your workflow.
+# ------------------------------------------------------------------------
+find_renv_project() {
+    local cur="$SCRIPT_DIR"
+    while [[ "$cur" != "/" ]]; do
+        if [[ -f "$cur/renv/activate.R" ]]; then
+            echo "$cur"
+            return 0
+        fi
+        cur="$(dirname "$cur")"
+    done
+    return 1
+}
+
+# ------------------------------------------------------------------------
+# 3) Attempt to find a renv-based project
+# ------------------------------------------------------------------------
+if PROJECT_DIR="$(find_renv_project)"; then
+    echo "Found renv project at: $PROJECT_DIR"
 else
-  R_EXECUTABLE=$(which R)
+    echo "No renv project found up from $SCRIPT_DIR. Falling back to system libraries."
+    PROJECT_DIR=""
 fi
 
-#find library path
-LIBRARY_PATH="$DIR/../.."
-if [ ! -d "$LIBRARY_PATH/smartqc" ]; then
-  LIBRARY_PATH="/home/jarcos/clean/smartqc_project/renv/library/linux-ubuntu-jammy/R-4.4/x86_64-pc-linux-gnu"
-fi
+# ------------------------------------------------------------------------
+# 4) Build the R command. If renv found, source renv/activate.R
+# ------------------------------------------------------------------------
+read -r -d '' R_COMMAND << EOF
+# If we found a renv project, activate it
+if ("$PROJECT_DIR" != "" && file.exists(file.path("$PROJECT_DIR", "renv/activate.R"))) {
+  message("Activating renv from: $PROJECT_DIR/renv/activate.R")
+  source(file.path("$PROJECT_DIR", "renv/activate.R"))
+}
 
-#R command builder, options added here, must be consistent with smartqc/R/smartqc.R
-R_COMMAND="
-.libPaths(c('$LIBRARY_PATH', .libPaths()))
-library(smartqc)
+# Now we can load your packages + parse args
 library(optparse)
+library(smartqc)
 
 option_list <- list(
-  make_option(c('-i', '--input'), type='character', default=NULL, 
-              help='Input directory with raw data', metavar='character'),
-  make_option(c('-o', '--output'), type='character', default='processed_data.rds', 
-              help='Output file [default= %default]', metavar='character'),
-  make_option(c('-r', '--root'), type='character', default=NULL, 
-              help='Root directory containing Studies folder', metavar='character'),
-  make_option(c('-s', '--study'), type='character', default=NULL, 
-              help='Study name', metavar='character'),
-  make_option(c('-g', '--organism'), type='character', default='MOUSE', 
-              help='Organism (MOUSE, HUMAN, or RAT) [default= %default]', metavar='character')
+  make_option(c("-i", "--input"), type="character", default=NULL,
+              help="Input directory with raw data", metavar="character"),
+  make_option(c("-o", "--output"), type="character", default="processed_data.rds",
+              help="Output file [default= %default]", metavar="character"),
+  make_option(c("-r", "--root"), type="character", default=NULL,
+              help="Root directory containing Studies folder", metavar="character"),
+  make_option(c("-s", "--study"), type="character", default=NULL,
+              help="Study name", metavar="character"),
+  make_option(c("-g", "--organism"), type="character", default="MOUSE",
+              help="Organism (MOUSE, HUMAN, or RAT) [default= %default]", metavar="character")
 )
-
 opt_parser <- OptionParser(option_list=option_list)
 opt <- parse_args(opt_parser)
-
-print(opt)  # Debug: Print parsed options
+print(opt)  # Debug
 
 if (is.null(opt\$input) && (is.null(opt\$root) || is.null(opt\$study))) {
   print_help(opt_parser)
-  stop('Either input directory or root directory and study name must be supplied', call.=FALSE)
+  stop("Either input directory OR (root directory + study name) must be provided.", call.=FALSE)
 }
 
+# Finally run your function
 tryCatch({
-  if (!is.null(opt\$input)) {
-    run_smartqc(input = opt\$input, output = opt\$output, organism = opt\$organism)
-  } else {
-    run_smartqc(root = opt\$root, study = opt\$study, organism = opt\$organism)
-  }
-  cat('SmartQC analysis completed successfully.\n')
+    if (!is.null(opt\$input)) {
+        run_smartqc(input = opt\$input, output = opt\$output, organism = opt\$organism)
+    } else {
+        run_smartqc(root = opt\$root, study = opt\$study, organism = opt\$organism)
+    }
+    cat("SmartQC analysis completed successfully.\n")
 }, error = function(e) {
-  cat('Error in SmartQC analysis:', conditionMessage(e), '\n')
-  quit(status = 1)
+    cat("Error in SmartQC analysis:", conditionMessage(e), "\n")
+    quit(status = 1)
 })
-"
+EOF
 
-#run R command while parsing above
-$R_EXECUTABLE --vanilla --slave -e "$R_COMMAND" --args "$@"
+# ------------------------------------------------------------------------
+# 5) Choose which R to run: use $R_HOME or system R
+# ------------------------------------------------------------------------
+if [ -n "$R_HOME" ]; then
+    R_EXECUTABLE="$R_HOME/bin/R"
+else
+    R_EXECUTABLE="$(which R)"
+fi
+
+# ------------------------------------------------------------------------
+# 6) Execute the R command, passing any CLI args to the script
+# ------------------------------------------------------------------------
+"$R_EXECUTABLE" --vanilla --slave -e "$R_COMMAND" --args "$@"

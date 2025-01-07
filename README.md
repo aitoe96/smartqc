@@ -7,6 +7,7 @@
 ```R
 # Install devtools if not already installed
 if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
+#if installation becomes a problem, particularly in HPC environments, you can use remotes below (less dependencies)
 
 # Install Bioconductor dependencies
 if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
@@ -16,10 +17,22 @@ BiocManager::install(c("preprocessCore", "BiocGenerics", "DelayedArray", "Delaye
                        "terra", "ggrastr", "densvis", "biomaRt"))
 
 # Install GitHub dependencies
-devtools::install_github('chris-mcginnis-ucsf/DoubletFinder')
-devtools::install_github('satijalab/seurat-wrappers')
+devtools::install_github("chris-mcginnis-ucsf/DoubletFinder@1b1d4e2")
+devtools::install_github('satijalab/seurat-wrappers@community-vignette')
 devtools::install_github("arc85/singleseqgset")
 devtools::install_github('cole-trapnell-lab/monocle3')
+
+#A note on this branch: this will be the Seurat 4 version of the workflow. 
+#The dependencies have changed to the point keeping the same scripts or libraries is not sustainable
+#To prevent leftover SeuratObject v5 properties from causing conflicts, you should run
+if (!requireNamespace("remotes", quietly = TRUE)) {
+  install.packages("remotes")
+}
+options(repos = c("https://satijalab.r-universe.dev", getOption("repos")))
+remotes::install_version("SeuratObject", "4.1.4")
+remotes::install_version("Seurat", "4.4.0", upgrade = FALSE)
+
+#and restart your R session so that the change is registered
 
 # Install SmartQC
 devtools::install_github('jarcoshodar/smartqc')
