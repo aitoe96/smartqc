@@ -15,7 +15,6 @@ library(densvis)
 library(monocle3)
 library(singleseqgset)
 library(pheatmap)
-library(SingleCellExperiment)
 library(SeuratWrappers)
 library(GSA)
 library(preprocessCore)
@@ -102,7 +101,13 @@ load_necessary_data <- function(org) {
 #'
 #' @examples
 #' filtered_seurat <- filterCells(seurat_obj, mad.coeff = 3, pass = 1, org = "HUMAN")
-filterCells <- function(seur,mad.coeff = 3,pass = -1,org = "HUMAN", output_path = output_dir){
+filterCells <- function(seur,mad.coeff = 3, 
+                        min.features.thr = NULL, 
+                        max.features.thr = NULL,
+                        max.mito.thr = NULL, 
+                        min.mito.thr = NULL,
+                        max.count.thr = NULL,
+                        pass = -1,org = "HUMAN", output_path = output_dir){
 
   seur@meta.data$Barcodes <- rownames(seur@meta.data)
   #Calculate percent.mito and percent.ribo metadata columns if they are not there
@@ -131,9 +136,12 @@ filterCells <- function(seur,mad.coeff = 3,pass = -1,org = "HUMAN", output_path 
   #filter cells based on percentage of mitochondrial transcripts
   cell.QC.stat <- seur@meta.data
 
-  max.mito.thr <- median(cell.QC.stat$percent.mito) + mad.coeff*mad(cell.QC.stat$percent.mito)
-  min.mito.thr <- median(cell.QC.stat$percent.mito) - mad.coeff*mad(cell.QC.stat$percent.mito)
-
+  if (is.null(max.mito.thr)){
+    max.mito.thr <- median(cell.QC.stat$percent.mito) + mad.coeff*mad(cell.QC.stat$percent.mito)
+    min.mito.thr <- median(cell.QC.stat$percent.mito) - mad.coeff*mad(cell.QC.stat$percent.mito)
+  }
+  
+ 
   p1 <- ggplot(cell.QC.stat, aes(x=nFeature_RNA, y=percent.mito)) +
     geom_point() +
     geom_hline(aes(yintercept = max.mito.thr), colour = "red", linetype = 2) +
@@ -148,12 +156,13 @@ filterCells <- function(seur,mad.coeff = 3,pass = -1,org = "HUMAN", output_path 
 
   #filtering cells based on number of genes and transcripts detected
   #set low and hight thresholds on the number of detected genes
-  min.features.thr <- median(log10(cell.QC.stat$nFeature_RNA)) - mad.coeff*mad(log10(cell.QC.stat$nFeature_RNA))
-  max.features.thr <- median(log10(cell.QC.stat$nFeature_RNA)) + mad.coeff*mad(log10(cell.QC.stat$nFeature_RNA))
-
-  #set hight threshold on the number of transcripts
-  max.count.thr <- median(log10(cell.QC.stat$nCount_RNA)) + mad.coeff*mad(log10(cell.QC.stat$nCount_RNA))
-
+  if (is.null(max.features.thr)){
+    min.features.thr <- median(log10(cell.QC.stat$nFeature_RNA)) - mad.coeff*mad(log10(cell.QC.stat$nFeature_RNA))
+    max.features.thr <- median(log10(cell.QC.stat$nFeature_RNA)) + mad.coeff*mad(log10(cell.QC.stat$nFeature_RNA))
+    #set hight threshold on the number of transcripts
+    max.count.thr <- median(log10(cell.QC.stat$nCount_RNA)) + mad.coeff*mad(log10(cell.QC.stat$nCount_RNA))
+  }
+   
   p1 <- ggplot(cell.QC.stat, aes(x=log10(nCount_RNA), y=log10(nFeature_RNA))) +
     geom_point() +
     geom_smooth(method="lm") +
@@ -210,118 +219,71 @@ filterCells <- function(seur,mad.coeff = 3,pass = -1,org = "HUMAN", output_path 
 
 #' Find Optimal Resolution for Clustering
 #'
-#' This function takes a Seurat object and a range of PC components,
-#' calculates the Calinski-Harabasz index at a range of resolutions (Leiden),
-#' and applies the resolution that yields the highest CH index back to the
-#' Seurat object's `seurat_clusters` metadata. 
-#' A plot of the CH index across resolutions is saved.
+#' This function takes a Seurat object and PC components number,
+#' estimates the Calinski-Harabasz index for a given range of resolutions,
+#' and implements the one with the highest score.
+#' This implementation rewards within and between cluster heterogeneity.
+#' Often several cell types are in a cluster, so future functions implement
+#' ways of subsetting and merging clusters for labeling.
+#' A plot of the Calinski-Harabasz index across resolutions is saved.
 #'
 #' @param seur A Seurat object.
-#' @param pcs An integer vector specifying which principal components to use
-#'   (e.g., 1:50).
+#' @param pcs An integer range specifying the number of principal components to use.
+#'   Example use is 1:50 or 1:numPCs when numPCs was previously defined as 50.
 #' @param output_path A string specifying the directory to save the plot.
-#'   Default is `output_dir`.
+#'   Default is `output_dir`. output_dir is defined by the workflow in
+#'   global environment for loops, but any other valid path can be given.
 #'
-#' @return A modified Seurat object with the winning clustering in
-#'   `seurat_clusters` and `Idents(seur)`.
+#' @return A modified Seurat object with the winning clustering implemented.
 #' @export
 #'
 #' @examples
 #' seur <- findOptimalResolution(seur, pcs = 1:50)
-findOptimalResolution <- function(seur, pcs, output_path = output_dir) {
-  
-  # 1) Build a CellDataSet manually from the Seurat object
-  expression_matrix <- GetAssayData(seur, assay = "RNA", slot = "data")
-  cell_metadata     <- seur@meta.data
-  gene_metadata     <- data.frame(
-    gene_short_name = rownames(expression_matrix),
-    row.names       = rownames(expression_matrix)
-  )
-  
-  cds <- new_cell_data_set(
-    expression_data = expression_matrix,
-    cell_metadata   = cell_metadata,
-    gene_metadata   = gene_metadata
-  )
-  
-  # 2) If you want Monocle to do UMAP-based clustering (Leiden, resolution_method="UMAP"),
-  #    ensure UMAP embeddings are added to cds if the Seurat object has them.
-  #    This step is important if you do `cluster_cells(..., reduction_method = "UMAP")`.
-  if (is.null(SingleCellExperiment::reducedDims(cds))) {
-    SingleCellExperiment::reducedDims(cds) <- S4Vectors::SimpleList()
-  }
-  if ("umap" %in% names(seur@reductions)) {
-    umap_coords <- Embeddings(seur, "umap")
-    reducedDims(cds)$UMAP <- umap_coords
-  } else {
-    warning(
-      "Seurat object has no 'umap' reduction. Monocle's cluster_cells(UMAP) may fail ",
-      "or produce NA clusters. If you truly want a UMAP-based method, run RunUMAP(seur) first."
-    )
-  }
-  
-  # 3) Extract the PCA embeddings (for the CH calculation) using your chosen 'pcs'
-  emb <- Embeddings(seur@reductions$pca)[, pcs]
-  
-  # 4) Define the resolution range
-  resolutions <- c(rbind(10^seq(-7,0), 5 * 10^seq(-7,0)))
-  # remove the smallest one if desired, just like your original code
-  resolutions <- rev(rev(resolutions)[-1])  # see original
+findOptimalResolution <- function(seur,pcs,output_path = output_dir){
+
+  cds <- as.cell_data_set(seur)
+  emb <- Embeddings(object = seur@reductions$pca)[, pcs]
+  resolutions <- c(rbind(10^seq(-7,0),5*10^seq(-7,0)))
+  resolutions <- rev(rev(resolutions)[-1])
   idx_list <- list()
-  
-  # 5) Loop through resolutions to compute CH index
-  for (i in seq_along(resolutions)) {
-    cat("Resolution:", resolutions[i], "\n")
-    
-    # cluster_cells at the current resolution
-    cds <- cluster_cells(
-      cds,
-      k                = 10,
-      reduction_method = "UMAP",
-      cluster_method   = "leiden",
-      resolution       = resolutions[i],
-      num_iter         = 5
-    )
-    
+  for(i in 1:length(resolutions)){
+    print(paste0("Resolution: ",resolutions[i]))
+    cds <- cluster_cells(cds,
+                         k = 10,
+                         reduction_method = "UMAP",
+                         cluster_method = "leiden",
+                         resolution = resolutions[i],
+                         num_iter = 5)
     part <- as.integer(clusters(cds))
-    # compute calinhara
-    idx_list[[i]] <- fpc::calinhara(emb, part)
+    idx_list[[i]] <- fpc::calinhara(emb,part)
   }
-  
-  # 6) Summarize and plot
-  df <- data.frame(
-    Resolution = resolutions,
-    Value      = unlist(idx_list),
-    stringsAsFactors = FALSE
-  )
-  
+
+  df <- data.frame(Resolution = resolutions,
+                   Value = unlist(idx_list),
+                   stringsAsFactors = F)
+
   p <- ggplot(data=df, aes(x=Resolution, y=Value)) +
-    geom_line() +
-    geom_point() +
-    ylab("Calinski-Harabasz Index") +
+    geom_line()+
+    geom_point()+
+    ylab("Calinski Harabasz Index")+
     xlab("Resolution")
-  
-  ggsave(filename = paste0(output_path, "/Calinski_Harabasz_Index.png"), plot = p)
-  
-  # 7) Pick the best resolution
-  best_res <- df$Resolution[ which.max(df$Value) ]
-  
-  # Re-run cluster_cells at best resolution
-  cds <- cluster_cells(
-    cds,
-    k                = 10,
-    reduction_method = "UMAP",
-    cluster_method   = "leiden",
-    resolution       = best_res,
-    num_iter         = 5
-  )
-  
-  # 8) Store final clusters in Seurat
+  ggsave(paste0(output_path,"/Calinski_Harabasz_Index.png"),plot = p)
+
+  res <- df$Resolution[which(df$Value == max(df$Value,na.rm = T))]
+  cds <- cluster_cells(cds,
+                       k = 10,
+                       reduction_method = "UMAP",
+                       cluster_method = "leiden",
+                       resolution = res,
+                       num_iter = 5)
+
+
   seur$seurat_clusters <- clusters(cds)
   Idents(seur) <- clusters(cds)
-  
+
   return(seur)
 }
+
 #' Annotate cells in a Seurat object using SCINA
 #'
 #' This function annotates cells in a Seurat object using the SCINA algorithm.
