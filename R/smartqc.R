@@ -18,7 +18,6 @@
 #' @import singleseqgset
 #' @import SeuratWrappers
 #' @import scCustomize
-#' @import SingleCellExperiment
 #' @importFrom RColorBrewer brewer.pal
 #' @importFrom ggExtra ggMarginal
 #' @importFrom cowplot plot_grid
@@ -29,9 +28,12 @@
 #' @importFrom preprocessCore normalize.quantiles
 #'
 #' @export
-run_smartqc <- function(input = NULL, output = NULL, root = NULL, study = NULL, organism = "MOUSE") {
-  options(future.globals.maxSize = 50 * 1024^3) # 50 GB
-  
+run_smartqc <- function(input = NULL, output = NULL, root = NULL, study = NULL, organism = "MOUSE", 
+                        min.features.thr = NULL, 
+                        max.features.thr = NULL,
+                        max.mito.thr = NULL, 
+                        min.mito.thr = NULL,
+                        max.count.thr = NULL) {
   #silence package start up and warnings noise but ##TODO: find fix
   old_options <- options(
     warn = -1, 
@@ -54,7 +56,12 @@ if (!is.null(input)) {
   if (file.exists(output_file)) {
     message(sprintf("Processed file already exists: %s. Skipping.", output_file))
   } else {
-    seur <- process_sample(input, organism, cellcyclegenes, output_dir)
+    seur <- process_sample(input, organism, cellcyclegenes, output_dir,
+                           min.features.thr, 
+                           max.features.thr,
+                           max.mito.thr, 
+                           min.mito.thr,
+                           max.count.thr)
     if (!is.null(seur)) {
       saveRDS(seur, file = output_file)
       message(sprintf("Processed data saved to: %s", output_file))
@@ -139,7 +146,12 @@ if (!is.null(input)) {
         next
       }
       
-      seur <- process_sample(inp.dir, organism, cellcyclegenes, sample_dir)
+      seur <- process_sample(inp.dir, organism, cellcyclegenes, sample_dir,
+                             min.features.thr, 
+                             max.features.thr,
+                             max.mito.thr, 
+                             min.mito.thr,
+                             max.count.thr)
       if (!is.null(seur)) {
         saveRDS(seur, file = output_file)
         message(sprintf("Processed data saved to: %s", output_file))
@@ -171,10 +183,14 @@ process_sample <- function(input_dir,
                            run_umap = TRUE,
                            run_densmap = FALSE,
                            run_scina = FALSE,
-                           umap_neighbors = 20) {
+                           umap_neighbors = 20, 
+                           min.features.thr, 
+                           max.features.thr,
+                           max.mito.thr, 
+                           min.mito.thr,
+                           max.count.thr) {
   tryCatch({
-    options(future.globals.maxSize = 50 * 1024^3) # 50 GB
-    
+  
   if (length(list.files(input_dir)) == 1) {
     file_name <- list.files(input_dir)[1]
     if (grepl("\\.h5$", file_name)) {
@@ -200,7 +216,13 @@ process_sample <- function(input_dir,
       ggsave(file.path(output_dir, "Count_Feature_Marginal_1stPass.png"), plot = p)
     }
       
-    seur <- filterCells(seur, mad.coeff = 3, pass = 1, org = organism, output_path = output_dir)
+    seur <- filterCells(seur,
+                        min.features.thr, 
+                        max.features.thr,
+                        max.mito.thr, 
+                        min.mito.thr,
+                        max.count.thr, 
+                        mad.coeff = 3, pass = 1, org = organism, output_path = output_dir)
   
   # Normalization and feature selection
   seur <- NormalizeData(seur)
@@ -223,9 +245,9 @@ process_sample <- function(input_dir,
 						   g2m.features = g2m_genes, 
 						   set.ident = F)
   
-  if (!is.null(output_dir)) {
-      ggsave(file.path(output_dir, "PCA_CellCycleGenes.png"), DimPlot(seur, group.by = "Phase"))
-    }
+ # if (!is.null(output_dir)) {
+ #     ggsave(file.path(output_dir, "PCA_CellCycleGenes.png"), DimPlot(seur, group.by = "Phase"))
+  #  }
   
   seur$CC.Difference <- seur$S.Score - seur$G2M.Score
   
@@ -241,7 +263,7 @@ process_sample <- function(input_dir,
   numPCs <- 50  # Hard-coded
   
   #Doublet detection
-  sweep.list <- paramSweep_v3(seur, PCs = 1:numPCs,sct = T)
+  sweep.list <- paramSweep(seur, PCs = 1:numPCs,sct = T)
     
   sweep.stats <- summarizeSweep(sweep.list, GT = FALSE)
     
@@ -255,7 +277,7 @@ process_sample <- function(input_dir,
     
   nExp <- round(ncol(seur) * (unname(predict(lm_doublets,data.frame(numCellsRec = ncol(seur))))/100))
   pK <- as.numeric(levels(bcmvn$pK)[bcmvn$BCmetric == max(bcmvn$BCmetric)])
-  seur <- doubletFinder_v3(seu = seur,
+  seur <- doubletFinder(seu = seur,
                                     PCs = 1:numPCs,
                                     pN = 0.25, #default
                                     pK = pK,
@@ -289,20 +311,20 @@ process_sample <- function(input_dir,
   if (run_umap) {
    seur <- RunUMAP(seur, dims = 1:numPCs, n.neighbors = umap_neighbors)
    if (!is.null(output_dir)) {
-     ggsave(file.path(output_dir, "UMAP.png"), DimPlot(seur, reduction = "umap"))
+     #ggsave(file.path(output_dir, "UMAP.png"), DimPlot(seur, reduction = "umap"))
    }
   }
 	  
   # Clustering
   seur <- findOptimalResolution(seur, pcs = 1:numPCs, output_path = output_dir)
   if (!is.null(output_dir)) {
-      ggsave(file.path(output_dir, "tSNE.png"), DimPlot(seur, reduction = "tsne"))
+     # ggsave(file.path(output_dir, "tSNE.png"), DimPlot(seur, reduction = "tsne"))
     }
         # Run DensMAP (optional)
     if (run_densmap) {
       seur <- runDensUMAP(seur, pcs = 1:numPCs)
       if (!is.null(output_dir)) {
-        ggsave(file.path(output_dir, "densMap.png"), DimPlot(seur, reduction = "densumap"))
+       # ggsave(file.path(output_dir, "densMap.png"), DimPlot(seur, reduction = "densumap"))
       }
     }
 
@@ -311,9 +333,9 @@ process_sample <- function(input_dir,
     tryCatch({
       seur <- annotateCells(seur, org = organism, id.type = "Symbol", tissue = "ALL")
       if (!is.null(output_dir)) {
-        ggsave(file.path(output_dir, "UMAP_SCINA.png"), 
-               DimPlot(seur, reduction = "umap", group.by = "SCINA_annot"), 
-               width = 15)
+     #   ggsave(file.path(output_dir, "UMAP_SCINA.png"), 
+      #         DimPlot(seur, reduction = "umap", group.by = "SCINA_annot"), 
+       #        width = 15)
       }
     }, error = function(e) {
       warning(paste("SCINA annotation failed:", e$message))
